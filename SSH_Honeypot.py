@@ -1,23 +1,38 @@
 import paramiko  # SSH protocol library for handling SSH connections
 import socket    # For creating the network socket, allowing my honeypot to create a server that listens for incoming SSH connections
 import threading # To handle multiple connections at the same time
+import os # Helps me to add the headers to the csv file
+import csv # Changed from TXT to CSV for better layout which can be parsed through easier for my dashboard implementation.
+from datetime import datetime # Date and Time for the attacks for more accurate information
 
 # --- Configuration Settings ---
 HOST = "0.0.0.0"  # Listens on all network interfaces accepting all and any connections
 PORT = 2222       # The honeypot will listen on this port for testing purposes. When deployed in  a real world environment I will switch to port 22 (SSH runs on port 22 which will attract real attackers)
-LOG_FILE = "honeypot_logs.txt"  # Creating the file where the attacker's attempts are recorded
+LOG_FILE = "honeypot_logs.csv"  # Creating the file where the attacker's attempts are recorded
 
 # Generate a fake SSH host key (RSA 2048-bit) to simulate a real SSH server
 host_key = paramiko.RSAKey.generate(2048)
 
 # --- Function to Log Attacker Attempts ---
 def log_attempt(ip, username, password):
-    """
-    Writes the attackers login attempts to the log file. This is called every time an unauthorized user tries to log in.
-    """
-    with open(LOG_FILE, "a") as log:
-        log.write(f"IP: {ip} | Username: {username} | Password: {password}\n")
-    print(f"[!] ATTEMPT LOGGED: IP={ip}, Username={username}, Password={password}")  # Display login attempts live in the terminal
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    # Check if file exists and is empty, then write headers
+    file_exists = os.path.isfile(LOG_FILE)
+    is_empty = os.stat(LOG_FILE).st_size == 0 if file_exists else True
+
+    with open(LOG_FILE, "a", newline="") as log:
+        writer = csv.writer(log)
+        
+        # Write headers if file is newly created or empty
+        if is_empty:
+            writer.writerow(["Timestamp", "IP", "Username", "Password"])
+        
+        # Write the actual log entry
+        writer.writerow([timestamp, ip, username, password])
+
+    print(f"[!] ATTEMPT LOGGED: {timestamp} | IP={ip}, Username={username}, Password={password}")
+
 
 # --- SSH Honeypot Server Interface ---
 class SSHHoneypot(paramiko.ServerInterface):
