@@ -4,6 +4,7 @@ import threading # To handle multiple connections at the same time
 import os # Helps me to add the headers to the csv file
 import csv # Changed from TXT to CSV for better layout which can be parsed through easier for my dashboard implementation.
 from datetime import datetime # Date and Time for the attacks for more accurate information
+import requests # To fetch geo locaton data
 
 # --- Configuration Settings ---
 HOST = "0.0.0.0"  # Listens on all network interfaces accepting all and any connections
@@ -14,8 +15,25 @@ LOG_FILE = "honeypot_logs.csv"  # Creating the file where the attacker's attempt
 host_key = paramiko.RSAKey.generate(2048)
 
 # --- Function to Log Attacker Attempts ---
+def get_geolocation(ip):
+    """Fetch geolocation data for the attacker's IP address."""
+    try:
+        response = requests.get(f"http://ip-api.com/json/{ip}")
+        data = response.json()
+
+        if data["status"] == "fail":
+            return "Unknown", "Unknown", 0, 0  # If lookup fails, return unkown
+
+        return data["country"], data["city"], data["lat"], data["lon"]
+    except Exception as e:
+        print(f"[ERROR] Geolocation lookup failed for {ip}: {e}")
+        return "Unknown", "Unknown", 0, 0
+
 def log_attempt(ip, username, password):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    # Fetch geolocation details
+    country, city, lat, lon = get_geolocation(ip)
 
     # Check if file exists and is empty, then write headers
     file_exists = os.path.isfile(LOG_FILE)
@@ -26,12 +44,12 @@ def log_attempt(ip, username, password):
         
         # Write headers if file is newly created or empty
         if is_empty:
-            writer.writerow(["Timestamp", "IP", "Username", "Password"])
+            writer.writerow(["Timestamp", "IP", "Username", "Password", "Country", "City", "Latitude", "Longitude"])
         
         # Write the actual log entry
-        writer.writerow([timestamp, ip, username, password])
+        writer.writerow([timestamp, ip, username, password, country, city, lat, lon])
 
-    print(f"[!] ATTEMPT LOGGED: {timestamp} | IP={ip}, Username={username}, Password={password}")
+    print(f"[!] ATTEMPT LOGGED: {timestamp} | IP={ip}, Username={username}, Password={password}, Location={city}, {country}")
 
 
 # --- SSH Honeypot Server Interface ---
