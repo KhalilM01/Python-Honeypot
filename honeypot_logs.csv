@@ -14,3 +14,12 @@ Timestamp,IP,Username,Password,Country,City,Latitude,Longitude
 2025-02-05 16:17:52,127.0.0.1,attacker3,password,Unknown,Unknown,0,0
 2025-02-05 16:17:56,127.0.0.1,attacker3,hello,Unknown,Unknown,0,0
 2025-02-05 16:18:01,127.0.0.1,attacker3,honeypot,Unknown,Unknown,0,0
+2025-02-20 20:47:31,127.0.0.1,root,no,Unknown,Unknown,0,0
+2025-02-20 20:47:33,127.0.0.1,root,root,Unknown,Unknown,0,0
+2025-02-20 21:08:53,127.0.0.1,root,root,Unknown,Unknown,0,0
+2025-02-20 21:44:43,127.0.0.1,root,roo,Unknown,Unknown,0,0
+2025-02-20 21:44:45,127.0.0.1,root,root,Unknown,Unknown,0,0
+2025-02-20 21:44:47,127.0.0.1,SHELL_COMMAND,ls
+2025-02-20 21:44:49,127.0.0.1,SHELL_COMMAND,cd
+2025-02-20 21:44:52,127.0.0.1,SHELL_COMMAND,ls
+2025-02-20 21:44:59,127.0.0.1,SHELL_COMMAND,cat secret.txt
