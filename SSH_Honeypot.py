@@ -51,6 +51,17 @@ def log_attempt(ip, username, password):
 
     print(f"[!] ATTEMPT LOGGED: {timestamp} | IP={ip}, Username={username}, Password={password}, Location={city}, {country}")
 
+def log_shell_command(ip, command):
+    """
+    Logs the attacker's shell activity in the CSV log file.
+    """
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    with open(LOG_FILE, "a", newline="") as log:
+        writer = csv.writer(log)
+        writer.writerow([timestamp, ip, "SHELL_COMMAND", command])
+
+    print(f"[LOG] {timestamp} | {ip} entered: {command}")  # Print for monitoring
 
 # --- SSH Honeypot Server Interface ---
 class SSHHoneypot(paramiko.ServerInterface):
@@ -88,9 +99,9 @@ class SSHHoneypot(paramiko.ServerInterface):
         return True  # Allow execution of fake commands
 
 # --- Function to Simulate a fake system ---
-def handle_fake_shell(channel):
+def handle_fake_shell(channel, client_ip):
     """
-    Simulate a fake Linux shell for the attacker.
+    Simulate a fake Linux shell for the attacker and log commands.
     """
     channel.send("\nWelcome to Ubuntu 22.04 LTS (GNU/Linux 5.15.0-43-generic x86_64)\n")
     channel.send("root@honeypot:~# ")  # Fake prompt
@@ -103,6 +114,7 @@ def handle_fake_shell(channel):
 
     while True:
         command = channel.recv(1024).decode("utf-8").strip()
+        log_shell_command(client_ip, command)  # Log the command
 
         if command.lower() in ["exit", "logout"]:
             channel.send("\nLogout successful.\n")
@@ -116,7 +128,7 @@ def handle_fake_shell(channel):
                 channel.send(f"ls: cannot access '{path}': No such file or directory\n")
 
         elif command.startswith("cd"):
-            channel.send("\n")  # Just mimics CD without actually changing directories
+            channel.send("\n")  # Just mimic CD without actually changing directories
 
         elif command.startswith("cat"):
             file = command[4:].strip()
@@ -129,7 +141,7 @@ def handle_fake_shell(channel):
             channel.send(f"bash: {command}: command not found\n")
 
         channel.send("root@honeypot:~# ")  # Repeat fake prompt
-        
+
 # --- Function to Start the Honeypot ---
 def start_honeypot():
     """
@@ -155,7 +167,7 @@ def start_honeypot():
         transport = paramiko.Transport(client)  # Create an SSH transport layer
         transport.add_server_key(host_key)  # Assign the fake SSH server key
 
-        # Step 5: Handle authentication using the SSHHoneypot class
+        # Step 5: Handle authentication using the SSH Honeypot class
         server_handler = SSHHoneypot(addr[0])  # Pass attacker's IP to the honeypot handler
 
         try:
@@ -166,7 +178,7 @@ def start_honeypot():
             if chan is None:
                 continue
 
-            handle_fake_shell(chan)  # Start fake shell session
+            handle_fake_shell(chan, addr[0])  # Start fake shell session
 
         except Exception as e:
             print(f"[ERROR] SSH session error: {e}")# Print error message (debugging) 
@@ -174,4 +186,3 @@ def start_honeypot():
 # --- Run the Honeypot ---
 if __name__ == "__main__":
     start_honeypot()  # Start the SSH honeypot when the script is run
-    
