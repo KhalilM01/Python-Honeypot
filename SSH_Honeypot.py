@@ -22,7 +22,7 @@ def get_geolocation(ip):
         data = response.json()
 
         if data["status"] == "fail":
-            return "Unknown", "Unknown", 0, 0  # If lookup fails, return unkown
+            return "Unknown", "Unknown", 0, 0  # If lookup fails, return placeholders
 
         return data["country"], data["city"], data["lat"], data["lon"]
     except Exception as e:
@@ -66,8 +66,70 @@ class SSHHoneypot(paramiko.ServerInterface):
         Instead of allowing access, it logs the credentials and always rejects them.
         """
         log_attempt(self.client_ip, username, password)  # Save the login attempt and add it to the log
-        return paramiko.AUTH_FAILED  # Always reject authentication
+        
+        if username == "root" and password == "root":
+            print(f"[!] ATTACKER LOGGED IN AS ROOT from {self.client_ip}")
+            return paramiko.AUTH_SUCCESSFUL  # Grant access if root/root is entered
+        
+        return paramiko.AUTH_FAILED  # Otherwise, reject authentication
+        
+    def get_allowed_auths(self, username):
+        return "password"
 
+    def check_channel_request(self, kind, chanid):
+        if kind == "session":
+            return paramiko.OPEN_SUCCEEDED
+        return paramiko.OPEN_FAILED_ADMINISTRATIVELY_PROHIBITED
+
+    def check_channel_shell_request(self, channel):
+        return True  # Allow shell access
+
+    def check_channel_exec_request(self, channel, command):
+        return True  # Allow execution of fake commands
+
+# --- Function to Simulate a fake system ---
+def handle_fake_shell(channel):
+    """
+    Simulate a fake Linux shell for the attacker.
+    """
+    channel.send("\nWelcome to Ubuntu 22.04 LTS (GNU/Linux 5.15.0-43-generic x86_64)\n")
+    channel.send("root@honeypot:~# ")  # Fake prompt
+
+    fake_filesystem = {
+        "/root": ["secret.txt", "id_rsa", "bash_history"],
+        "/etc": ["passwd", "shadow", "hosts"],
+        "/home/user": ["documents", "downloads", "ssh_keys"],
+    }
+
+    while True:
+        command = channel.recv(1024).decode("utf-8").strip()
+
+        if command.lower() in ["exit", "logout"]:
+            channel.send("\nLogout successful.\n")
+            break
+
+        elif command.startswith("ls"):
+            path = command[3:].strip() or "/root"
+            if path in fake_filesystem:
+                channel.send("  ".join(fake_filesystem[path]) + "\n")
+            else:
+                channel.send(f"ls: cannot access '{path}': No such file or directory\n")
+
+        elif command.startswith("cd"):
+            channel.send("\n")  # Just mimics CD without actually changing directories
+
+        elif command.startswith("cat"):
+            file = command[4:].strip()
+            if file in ["id_rsa", "shadow"]:
+                channel.send("Permission denied\n")
+            else:
+                channel.send(f"Fake contents of {file}\n")
+
+        elif command:
+            channel.send(f"bash: {command}: command not found\n")
+
+        channel.send("root@honeypot:~# ")  # Repeat fake prompt
+        
 # --- Function to Start the Honeypot ---
 def start_honeypot():
     """
@@ -98,9 +160,18 @@ def start_honeypot():
 
         try:
             transport.start_server(server=server_handler)  # Start the fake SSH server
-        except Exception as e:
-            print(f"[ERROR] Failed to start SSH transport: {e}")  # Print error message (debugging) 
+            
+         # Wait for authentication
+            chan = transport.accept(20)
+            if chan is None:
+                continue
 
+            handle_fake_shell(chan)  # Start fake shell session
+
+        except Exception as e:
+            print(f"[ERROR] SSH session error: {e}")# Print error message (debugging) 
+ 
 # --- Run the Honeypot ---
 if __name__ == "__main__":
     start_honeypot()  # Start the SSH honeypot when the script is run
+    
